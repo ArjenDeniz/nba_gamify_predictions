@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Opening night first tip, 2026-10-20T19:00:00Z. Keep in sync with LOCK_AT in src/config.ts.
+    function lockTime() { return timestamp.value(1792522800000); }
+    function locked() { return request.time >= lockTime(); }
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function isOrder(v) { return v is list && v.size() == 15; }
+
+    function validPrediction(d) {
+      return d.keys().hasOnly(['overUnder', 'east', 'west', 'updatedAt'])
+        && (!('overUnder' in d) || d.overUnder is map)
+        && (!('east' in d) || isOrder(d.east))
+        && (!('west' in d) || isOrder(d.west));
+    }
+
+    function validPlayer(d) {
+      return d.keys().hasOnly(['name', 'photoURL', 'ouCount', 'standingsDone', 'updatedAt'])
+        && d.name is string && d.name.size() <= 80
+        && d.ouCount is int
+        && d.standingsDone is bool;
+    }
+
+    // Your own picks are always visible to you; everyone else's only after lock.
+    match /predictions/{uid} {
+      allow read: if isOwner(uid) || (signedIn() && locked());
+      allow create, update: if isOwner(uid) && !locked() && validPrediction(request.resource.data);
+      allow delete: if false;
+    }
+
+    // Public progress summary for the "who's in" list.
+    match /players/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid) && !locked() && validPlayer(request.resource.data);
+      allow delete: if false;
+    }
+  }
+}

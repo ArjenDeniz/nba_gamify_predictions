@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  --font-sans: 'Archivo', system-ui, sans-serif;
+
+  --color-maple: #e3c393;
+  --color-sheet: #fbf6ec;
+  --color-line: #e9dcc6;
+  --color-ink: #2a1d12;
+  --color-ink-soft: #6b5340;
+  --color-over: #17694a;
+  --color-under: #b0242f;
+  --color-paint: #1e4a7a;
+  --color-playin: #c9861a;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Hardwood: plank seams over alternating board tones. */
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    background-color: var(--color-maple);
+    background-image:
+      repeating-linear-gradient(90deg, rgb(110 64 24 / 0.22) 0 1px, transparent 1px 76px),
+      repeating-linear-gradient(
+        90deg,
+        rgb(255 255 255 / 0.07) 0 19px,
+        rgb(140 86 36 / 0.06) 19px 38px,
+        transparent 38px 57px,
+        rgb(255 240 210 / 0.08) 57px 76px
+      );
+    background-attachment: fixed;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-paint);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
