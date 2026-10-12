@@ -17,6 +17,15 @@ Picks lock at opening tip, 2026-10-20 19:00 UTC. Until then nobody can read anyo
 
 Vite + React + TypeScript + Tailwind, Firebase Auth (Google) and Firestore, hosted on Vercel. There's no backend: the browser reads ESPN's public standings API directly.
 
+## Setup
+
+The Firebase web API key lives in Vercel env vars, not the repo. It's restricted to the site's domains
+(plus `localhost:5173`) and to the Auth and Firestore APIs.
+
+```sh
+vercel env pull .env.local   # gets VITE_FIREBASE_API_KEY
+```
+
 ## Scripts
 
 ```sh
