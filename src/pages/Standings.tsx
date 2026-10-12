@@ -22,6 +22,7 @@ import {
   autoOrder,
   closenessPoints,
   gamesPlayed,
+  savedOrder,
   type Pick,
   type Prediction,
   type Standings as LiveStandings,
@@ -66,12 +67,6 @@ export function Standings({ pred, locked, standings, onOrder }: Props) {
       </div>
     </div>
   )
-}
-
-function savedOrder(pred: Prediction, conf: Conference): string[] | null {
-  const ids = conf === 'East' ? pred.east : pred.west
-  const valid = ids?.length === 15 && ids.every((id) => TEAM_BY_ID[id]?.conf === conf)
-  return valid ? ids : null
 }
 
 function ConferenceBoard({

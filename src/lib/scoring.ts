@@ -28,6 +28,13 @@ export function autoOrder(teams: Team[], picks: OverUnderPicks): string[] {
     .map((t) => t.id)
 }
 
+// A conference order counts only once it's saved with all 15 of that conference's teams.
+export function savedOrder(pred: Prediction, conf: Conference): string[] | null {
+  const ids = conf === 'East' ? pred.east : pred.west
+  const valid = ids?.length === 15 && ids.every((id) => TEAM_BY_ID[id]?.conf === conf)
+  return valid ? ids : null
+}
+
 export const gamesPlayed = (r: TeamRecord) => r.wins + r.losses
 
 export function projectedWins(r: TeamRecord): number | null {

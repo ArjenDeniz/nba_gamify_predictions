@@ -6,6 +6,7 @@ import { TEAMS, TEAM_BY_ID } from './data/winTotals'
 import { useAllPredictions, useAuthUser, useMyPrediction, useNow, usePlayers } from './lib/data'
 import { useStandings } from './lib/espn'
 import { logOut, signIn } from './lib/firebase'
+import { savedOrder, type Prediction } from './lib/scoring'
 import { Leaderboard } from './pages/Leaderboard'
 import { OverUnder } from './pages/OverUnder'
 import { Standings } from './pages/Standings'
@@ -122,6 +123,7 @@ function Shell({ user }: { user: User }) {
       </nav>
 
       <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
+        {pred && !locked && <Checklist pred={pred} />}
         <ErrorNote message={error && `Your picks didn’t save (${error}). Check your connection and try again.`} />
         {!pred ? (
           <p className="px-1 text-ink-soft">Loading your picks…</p>
@@ -145,6 +147,47 @@ function Shell({ user }: { user: User }) {
         )}
       </main>
     </div>
+  )
+}
+
+// What's still missing before tip-off; each item jumps to the tab where you fix it.
+function Checklist({ pred }: { pred: Prediction }) {
+  const ouCount = TEAMS.filter((t) => pred.overUnder?.[t.id]).length
+  const items = [
+    { href: '#/over-under', label: `Over/Under ${ouCount}/${TEAMS.length}`, done: ouCount === TEAMS.length },
+    { href: '#/standings', label: 'East', done: savedOrder(pred, 'East') !== null },
+    { href: '#/standings', label: 'West', done: savedOrder(pred, 'West') !== null },
+  ]
+
+  return (
+    <ul className="flex flex-wrap gap-2" aria-label="Your picks">
+      {items.map((item) => (
+        <li key={item.label}>
+          <a
+            href={item.href}
+            className={`tabular flex items-center gap-1.5 rounded-lg bg-sheet px-3 py-1.5 text-sm font-semibold ${
+              item.done ? 'text-ink-soft' : 'text-under ring-2 ring-under/60'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className={item.done ? 'text-over' : ''}>
+              <path
+                d={item.done ? 'M2 7.5l3.2 3.2L12 3.8' : 'M3.5 3.5l7 7M10.5 3.5l-7 7'}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="sr-only">{item.done ? 'Done:' : 'Not done:'}</span>
+            <span>
+              {item.label}
+              {item.href === '#/standings' && <span className="max-sm:sr-only"> standings</span>}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
   )
 }
 
