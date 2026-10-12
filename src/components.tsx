@@ -16,6 +16,25 @@ export function TeamLogo({ team, size = 32 }: { team: Team; size?: number }) {
   )
 }
 
+export function Avatar({ player, size = 36 }: { player: { name: string; photoURL: string | null }; size?: number }) {
+  return player.photoURL ? (
+    <img
+      src={player.photoURL}
+      alt=""
+      referrerPolicy="no-referrer"
+      className="shrink-0 rounded-full"
+      style={{ width: size, height: size }}
+    />
+  ) : (
+    <span
+      className="grid shrink-0 place-items-center rounded-full bg-ink font-display font-extrabold text-sheet"
+      style={{ width: size, height: size, fontSize: size * 0.45 }}
+    >
+      {player.name.slice(0, 1)}
+    </span>
+  )
+}
+
 export function Sheet({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <section

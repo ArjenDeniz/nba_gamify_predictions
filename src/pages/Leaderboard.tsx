@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ErrorNote, OutcomeMark, PickTag, Sheet, TeamLogo } from '../components'
+import { Avatar, ErrorNote, OutcomeMark, PickTag, Sheet, TeamLogo } from '../components'
 import { LOCK_AT } from '../config'
 import { TEAMS, TEAM_BY_ID, type Conference } from '../data/winTotals'
 import type { Player } from '../lib/data'
@@ -50,25 +50,6 @@ export function Leaderboard(props: Props) {
       <ErrorNote message={standingsError && `Couldn’t load live standings from ESPN (${standingsError}). Retrying every minute.`} />
       {standings && <LiveTables standings={standings} updatedAt={updatedAt} />}
     </div>
-  )
-}
-
-function Avatar({ player, size = 36 }: { player: Player; size?: number }) {
-  return player.photoURL ? (
-    <img
-      src={player.photoURL}
-      alt=""
-      referrerPolicy="no-referrer"
-      className="shrink-0 rounded-full"
-      style={{ width: size, height: size }}
-    />
-  ) : (
-    <span
-      className="grid shrink-0 place-items-center rounded-full bg-ink font-display font-extrabold text-sheet"
-      style={{ width: size, height: size }}
-    >
-      {player.name.slice(0, 1)}
-    </span>
   )
 }
 

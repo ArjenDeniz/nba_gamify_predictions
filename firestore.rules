@@ -9,6 +9,10 @@ service cloud.firestore {
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
     function isOrder(v) { return v is list && v.size() == 15; }
 
+    // One pair doc per two players, the same whoever invited whom. Matches pairId() in src/lib/compare.ts.
+    function pairId(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+    function paired(a, b) { return exists(/databases/$(database)/documents/pairs/$(pairId(a, b))); }
+
     function validPrediction(d) {
       return d.keys().hasOnly(['overUnder', 'east', 'west', 'updatedAt'])
         && (!('overUnder' in d) || d.overUnder is map)
@@ -23,9 +27,10 @@ service cloud.firestore {
         && d.standingsDone is bool;
     }
 
-    // Your own picks are always visible to you; everyone else's only after lock.
+    // Your own picks are always visible to you; everyone else's only after lock,
+    // or before it to someone you've paired with on the Compare page.
     match /predictions/{uid} {
-      allow read: if isOwner(uid) || (signedIn() && locked());
+      allow read: if isOwner(uid) || (signedIn() && (locked() || paired(request.auth.uid, uid)));
       allow create, update: if isOwner(uid) && !locked() && validPrediction(request.resource.data);
       allow delete: if false;
     }
@@ -58,6 +63,43 @@ service cloud.firestore {
       allow create: if signedIn() && !locked() && validTally(teamId, {});
       allow update: if signedIn() && !locked() && validTally(teamId, resource.data);
       allow delete: if false;
+    }
+
+    // A single-use link to start comparing. Whoever holds the token can look at it.
+    match /invites/{token} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.from == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'createdAt'])
+        && request.resource.data.from == request.auth.uid;
+      // Accepting: only once, not your own link, and only together with creating the pair.
+      allow update: if signedIn()
+        && !('acceptedBy' in resource.data)
+        && resource.data.from != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acceptedBy'])
+        && request.resource.data.acceptedBy == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/pairs/$(pairId(request.auth.uid, resource.data.from)));
+      allow delete: if signedIn() && resource.data.from == request.auth.uid;
+    }
+
+    // Two players comparing picks. Created by whoever accepts the invite; either one can end it.
+    match /pairs/{id} {
+      allow get: if signedIn() && request.auth.uid in id.split('_');
+      allow list: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn() && validPair(id, request.resource.data);
+      allow delete: if signedIn() && request.auth.uid in resource.data.members;
+    }
+
+    function validPair(id, d) {
+      let invite = getAfter(/databases/$(database)/documents/invites/$(d.invite)).data;
+      return d.keys().hasOnly(['members', 'invite', 'createdAt'])
+        && d.invite is string
+        && invite.from != request.auth.uid
+        && invite.acceptedBy == request.auth.uid
+        && id == pairId(invite.from, request.auth.uid)
+        && d.members == (invite.from < request.auth.uid
+          ? [invite.from, request.auth.uid]
+          : [request.auth.uid, invite.from]);
     }
   }
 }

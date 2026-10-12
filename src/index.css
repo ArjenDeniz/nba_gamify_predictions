@@ -13,6 +13,23 @@
   --color-under: #b0242f;
   --color-paint: #1e4a7a;
   --color-playin: #c9861a;
+
+  /* Compare page: the two players step in toward the center circle, once. */
+  --animate-tip-left: tip-left 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-tip-right: tip-right 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @keyframes tip-left {
+    from {
+      opacity: 0;
+      transform: translateX(-28px);
+    }
+  }
+  @keyframes tip-right {
+    from {
+      opacity: 0;
+      transform: translateX(28px);
+    }
+  }
 }
 
 @layer base {

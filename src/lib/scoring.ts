@@ -87,3 +87,39 @@ export function scorePrediction(pred: Prediction, standings: Standings): Score {
 
   return { ou, ouClinched, standings: standingsPts, total: ou + standingsPts }
 }
+
+export type Match = {
+  same: string[] // teams you both called the same way
+  splits: string[] // teams you both picked, on opposite sides
+  standingsPts: number
+  standingsMax: number
+  points: number
+  max: number
+  pct: number | null // null until the two sheets overlap
+}
+
+// How closely two sheets agree: one scored against the other as if it were the final result.
+// Only what both people filled in counts, and the result is the same either way round.
+export function comparePredictions(a: Prediction, b: Prediction): Match {
+  const same: string[] = []
+  const splits: string[] = []
+  for (const t of TEAMS) {
+    const pa = a.overUnder?.[t.id]
+    const pb = b.overUnder?.[t.id]
+    if (pa && pb) (pa === pb ? same : splits).push(t.id)
+  }
+
+  let standingsPts = 0
+  let standingsMax = 0
+  for (const conf of ['East', 'West'] as Conference[]) {
+    const oa = savedOrder(a, conf)
+    const ob = savedOrder(b, conf)
+    if (!oa || !ob) continue
+    standingsMax += oa.length * 3
+    oa.forEach((id, i) => (standingsPts += closenessPoints(i + 1, ob.indexOf(id) + 1)))
+  }
+
+  const points = same.length + standingsPts
+  const max = same.length + splits.length + standingsMax
+  return { same, splits, standingsPts, standingsMax, points, max, pct: max ? Math.round((points / max) * 100) : null }
+}

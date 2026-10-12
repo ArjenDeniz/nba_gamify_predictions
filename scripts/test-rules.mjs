@@ -18,12 +18,16 @@ const mine = (before, after) => [
   ...(before !== undefined ? [{ function: 'get', args: [{ anyValue: {} }], result: { value: { data: before } } }] : []),
   { function: 'getAfter', args: [{ anyValue: {} }], result: { value: { data: after } } },
 ]
+// The one exists/existsAfter/getAfter call a compare rule makes, mocked to `value`.
+const lookup = (fn, value) => [{ function: fn, args: [{ anyValue: {} }], result: { value } }]
+const invite = { from: 'alice' }
 const nuggetsOver = { overUnder: { 7: 'O' } }
 const nuggetsUnder = { overUnder: { 7: 'U' } }
 
 const cases = [
   ['own prediction readable before lock', 'ALLOW', { uid: 'alice', method: 'get', path: 'predictions/alice', time: BEFORE }],
-  ["others' predictions hidden before lock", 'DENY', { uid: 'alice', method: 'get', path: 'predictions/bob', time: BEFORE }],
+  ["others' predictions hidden before lock", 'DENY', { uid: 'alice', method: 'get', path: 'predictions/bob', time: BEFORE, mocks: lookup('exists', false) }],
+  ["a paired player's predictions visible before lock", 'ALLOW', { uid: 'alice', method: 'get', path: 'predictions/bob', time: BEFORE, mocks: lookup('exists', true) }],
   ["others' predictions visible after lock", 'ALLOW', { uid: 'alice', method: 'get', path: 'predictions/bob', time: AFTER }],
   ['signed-out users see nothing after lock', 'DENY', { method: 'get', path: 'predictions/bob', time: AFTER }],
   ['players list readable before lock', 'ALLOW', { uid: 'alice', method: 'get', path: 'players/bob', time: BEFORE }],
@@ -43,6 +47,20 @@ const cases = [
   ["count can't jump by more than your pick", 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 6, U: 2 }, mocks: mine({}, nuggetsOver) }],
   ["another team's pick doesn't move this count", 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 5, U: 2 }, mocks: mine({}, { overUnder: { 9: 'O' } }) }],
   ['no extra fields on pick counts', 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 5, U: 2, who: 'alice' }, mocks: mine({}, nuggetsOver) }],
+  ['create your own invite', 'ALLOW', { uid: 'alice', method: 'create', path: 'invites/t1', time: BEFORE, data: invite }],
+  ["can't create an invite from someone else", 'DENY', { uid: 'bob', method: 'create', path: 'invites/t1', time: BEFORE, data: invite }],
+  ['accept an invite', 'ALLOW', { uid: 'bob', method: 'update', path: 'invites/t1', time: BEFORE, existing: invite, data: { ...invite, acceptedBy: 'bob' }, mocks: lookup('existsAfter', true) }],
+  ['accepting must create the pair in the same write', 'DENY', { uid: 'bob', method: 'update', path: 'invites/t1', time: BEFORE, existing: invite, data: { ...invite, acceptedBy: 'bob' }, mocks: lookup('existsAfter', false) }],
+  ["can't accept your own invite", 'DENY', { uid: 'alice', method: 'update', path: 'invites/t1', time: BEFORE, existing: invite, data: { ...invite, acceptedBy: 'alice' }, mocks: lookup('existsAfter', true) }],
+  ['an invite works once', 'DENY', { uid: 'carol', method: 'update', path: 'invites/t1', time: BEFORE, existing: { ...invite, acceptedBy: 'bob' }, data: { ...invite, acceptedBy: 'carol' }, mocks: lookup('existsAfter', true) }],
+  ['only the sender cancels an invite', 'DENY', { uid: 'bob', method: 'delete', path: 'invites/t1', time: BEFORE, existing: invite }],
+  ['accepting creates the pair', 'ALLOW', { uid: 'bob', method: 'create', path: 'pairs/alice_bob', time: BEFORE, data: { members: ['alice', 'bob'], invite: 't1' }, mocks: lookup('getAfter', { data: { ...invite, acceptedBy: 'bob' } }) }],
+  ["can't pair without accepting an invite", 'DENY', { uid: 'bob', method: 'create', path: 'pairs/alice_bob', time: BEFORE, data: { members: ['alice', 'bob'], invite: 't1' }, mocks: lookup('getAfter', { data: invite }) }],
+  ["can't pair with someone who didn't invite you", 'DENY', { uid: 'bob', method: 'create', path: 'pairs/bob_carol', time: BEFORE, data: { members: ['bob', 'carol'], invite: 't1' }, mocks: lookup('getAfter', { data: { ...invite, acceptedBy: 'bob' } }) }],
+  ['players can see their own pair', 'ALLOW', { uid: 'bob', method: 'get', path: 'pairs/alice_bob', time: BEFORE }],
+  ["others can't see a pair", 'DENY', { uid: 'carol', method: 'get', path: 'pairs/alice_bob', time: BEFORE }],
+  ['either player can stop comparing', 'ALLOW', { uid: 'bob', method: 'delete', path: 'pairs/alice_bob', time: BEFORE, existing: { members: ['alice', 'bob'] } }],
+  ["others can't end a pair", 'DENY', { uid: 'carol', method: 'delete', path: 'pairs/alice_bob', time: BEFORE, existing: { members: ['alice', 'bob'] } }],
   ["counts can't change after lock", 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: AFTER, existing: { O: 4, U: 2 }, data: { O: 5, U: 2 }, mocks: mine({}, nuggetsOver) }],
 ]
 

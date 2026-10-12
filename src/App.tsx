@@ -7,6 +7,7 @@ import { useAllPredictions, useAuthUser, useMyPrediction, useNow, usePlayers, us
 import { useStandings } from './lib/espn'
 import { logOut, signIn } from './lib/firebase'
 import { savedOrder, type Prediction } from './lib/scoring'
+import { Compare } from './pages/Compare'
 import { Leaderboard } from './pages/Leaderboard'
 import { OverUnder } from './pages/OverUnder'
 import { Standings } from './pages/Standings'
@@ -19,6 +20,8 @@ export default function App() {
 
 function SignIn() {
   const [error, setError] = useState<string | null>(null)
+  // Someone opened a compare invite link; the hash survives the sign-in popup.
+  const invited = window.location.hash.startsWith('#/invite/')
   // A slice of the board, from the top line to the bottom.
   const board = ['25', '24', '18', '8', '30', '17', '23'].map((id) => TEAM_BY_ID[id])
 
@@ -36,12 +39,13 @@ function SignIn() {
       <div className="order-1 md:order-2">
         <p className="font-display text-xl font-extrabold">NBA Pick’em {SEASON_LABEL}</p>
         <h1 className="mt-3 font-display text-6xl font-black leading-[0.9] sm:text-7xl">
-          Call the season before it starts.
+          {invited ? 'You’re invited to compare picks.' : 'Call the season before it starts.'}
         </h1>
         <p className="mt-5 max-w-prose text-lg text-ink-soft">
-          Pick over or under on all {TEAMS.length} Vegas win totals, rank both conferences 1 to 15, and watch the
-          leaderboard move with every game. Picks lock at tip-off on{' '}
-          {LOCK_AT.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}.
+          {invited
+            ? 'Sign in with Google to see who sent it. Accept, and you’ll both see how closely your over/unders and standings match.'
+            : `Pick over or under on all ${TEAMS.length} Vegas win totals, rank both conferences 1 to 15, and watch the leaderboard move with every game.`}{' '}
+          Picks lock at tip-off on {LOCK_AT.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}.
         </p>
         <button
           type="button"
@@ -62,26 +66,33 @@ const TABS = [
   { id: 'over-under', label: 'Over/Under' },
   { id: 'standings', label: 'Standings' },
   { id: 'leaderboard', label: 'Leaderboard' },
+  { id: 'compare', label: 'Compare' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
 
-function useHashTab(fallback: TabId): TabId {
-  const read = () => {
-    const id = window.location.hash.replace('#/', '')
-    return TABS.some((t) => t.id === id) ? (id as TabId) : fallback
+// #/<tab>, plus #/compare/<pairId> for a matchup and #/invite/<token> for an invite link.
+type Route = { tab: TabId; matchup?: string; invite?: string }
+
+function useRoute(fallback: TabId): Route {
+  const read = (): Route => {
+    const [id, param] = window.location.hash.replace('#/', '').split('/')
+    if (id === 'invite' && param) return { tab: 'compare', invite: param }
+    if (id === 'compare' && param) return { tab: 'compare', matchup: param }
+    return { tab: TABS.some((t) => t.id === id) ? (id as TabId) : fallback }
   }
-  const [tab, setTab] = useState(read)
+  const [route, setRoute] = useState(read)
   useEffect(() => {
-    const onHash = () => setTab(read())
+    const onHash = () => setRoute(read())
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   })
-  return tab
+  return route
 }
 
 function Shell({ user }: { user: User }) {
   const locked = isLocked(useNow(15_000))
-  const tab = useHashTab(locked ? 'leaderboard' : 'over-under')
+  const route = useRoute(locked ? 'leaderboard' : 'over-under')
+  const { tab } = route
   const { pred, error, setPick, setOrder } = useMyPrediction(user, !locked)
   const { standings, error: standingsError, updatedAt } = useStandings()
   const players = usePlayers()
@@ -113,7 +124,7 @@ function Shell({ user }: { user: User }) {
               key={t.id}
               href={`#/${t.id}`}
               aria-current={tab === t.id ? 'page' : undefined}
-              className={`flex-1 rounded-lg px-2 py-2 text-center text-sm font-semibold transition-colors ${
+              className={`flex-1 rounded-lg px-1 py-2 text-center text-[13px] font-semibold transition-colors sm:px-2 sm:text-sm ${
                 tab === t.id ? 'bg-sheet text-ink' : 'text-sheet/80 hover:text-sheet'
               }`}
             >
@@ -134,6 +145,17 @@ function Shell({ user }: { user: User }) {
           </div>
         ) : tab === 'standings' ? (
           <Standings pred={pred} locked={locked} standings={standings} onOrder={setOrder} />
+        ) : tab === 'compare' ? (
+          <Compare
+            key={route.invite ?? route.matchup ?? ''}
+            user={user}
+            pred={pred}
+            players={players}
+            locked={locked}
+            standings={standings}
+            invite={route.invite}
+            matchup={route.matchup}
+          />
         ) : (
           <Leaderboard
             meUid={user.uid}

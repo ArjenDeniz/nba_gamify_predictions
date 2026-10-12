@@ -4,9 +4,11 @@ import {
   MAX_TOTAL,
   autoOrder,
   closenessPoints,
+  comparePredictions,
   ouOutcome,
   projectedWins,
   scorePrediction,
+  type Prediction,
   type Standings,
   type TeamRecord,
 } from './scoring'
@@ -101,5 +103,43 @@ describe('scorePrediction', () => {
   it('handles a partial sheet', () => {
     const score = scorePrediction({ overUnder: { '18': 'O', '17': 'U' } }, perfect)
     expect(score).toEqual({ ou: 1, ouClinched: 1, standings: 0, total: 1 })
+  })
+})
+
+describe('comparePredictions', () => {
+  const east = autoOrder(teamsIn('East'), {})
+  const west = autoOrder(teamsIn('West'), {})
+  const allOver = Object.fromEntries(TEAMS.map((t) => [t.id, 'O' as const]))
+  const full: Prediction = { overUnder: allOver, east, west }
+
+  it('matches identical sheets at 100%', () => {
+    expect(comparePredictions(full, full)).toMatchObject({ points: MAX_TOTAL, max: MAX_TOTAL, pct: 100, splits: [] })
+  })
+
+  it('is the same either way round', () => {
+    const other: Prediction = {
+      overUnder: { ...allOver, '18': 'U', '25': 'U' },
+      east: [east[1], east[0], ...east.slice(2)],
+      west,
+    }
+    const ab = comparePredictions(full, other)
+    const ba = comparePredictions(other, full)
+    expect(ab.points).toBe(ba.points)
+    expect(ab.splits).toEqual(['18', '25'])
+    // Swapping two neighbours costs a point each: 45 - 2 in the East, 45 in the West.
+    expect(ab.standingsPts).toBe(88)
+    expect(ab.points).toBe(28 + 88)
+  })
+
+  it('only counts what both people filled in', () => {
+    const partial: Prediction = { overUnder: { '18': 'O', '17': 'U' }, east }
+    const m = comparePredictions(full, partial)
+    expect(m).toMatchObject({ same: ['18'], splits: ['17'], standingsMax: 45, standingsPts: 45, max: 47, points: 46 })
+    expect(m.pct).toBe(98)
+  })
+
+  it('has no match until the sheets overlap', () => {
+    expect(comparePredictions(full, {}).pct).toBeNull()
+    expect(comparePredictions({ overUnder: { '1': 'O' } }, { overUnder: { '2': 'O' } }).pct).toBeNull()
   })
 })
