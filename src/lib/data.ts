@@ -3,12 +3,14 @@ import {
   collection,
   deleteField,
   doc,
+  increment,
   onSnapshot,
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore'
 import { useEffect, useRef, useState } from 'react'
 import { TEAMS, type Conference } from '../data/winTotals'
+import { tallyDelta, type Tally } from './crowd'
 import { auth, db } from './firebase'
 import type { Pick, Prediction } from './scoring'
 
@@ -38,11 +40,16 @@ function playerFields(user: User, pred: Prediction) {
   }
 }
 
-// Writes the prediction change and the public progress summary together.
-function save(user: User, patch: Record<string, unknown>, next: Prediction) {
+// Writes the prediction change and the public progress summary together. A changed over/under
+// pick also moves that team's public counts; the rules reject counts that don't match the pick.
+function save(user: User, patch: Record<string, unknown>, next: Prediction, tally?: { teamId: string; delta: Tally }) {
   const batch = writeBatch(db)
   batch.set(doc(db, 'predictions', user.uid), { ...patch, updatedAt: serverTimestamp() }, { merge: true })
   batch.set(doc(db, 'players', user.uid), playerFields(user, next))
+  if (tally) {
+    const { O, U } = tally.delta
+    batch.set(doc(db, 'tallies', tally.teamId), { O: increment(O), U: increment(U) }, { merge: true })
+  }
   return batch.commit()
 }
 
@@ -77,7 +84,9 @@ export function useMyPrediction(user: User, editable: boolean) {
     const overUnder = { ...pred.overUnder }
     if (pick) overUnder[teamId] = pick
     else delete overUnder[teamId]
-    report(save(user, { overUnder: { [teamId]: pick ?? deleteField() } }, { ...pred, overUnder }))
+    const delta = tallyDelta(pred.overUnder?.[teamId], pick)
+    const tally = delta.O || delta.U ? { teamId, delta } : undefined
+    report(save(user, { overUnder: { [teamId]: pick ?? deleteField() } }, { ...pred, overUnder }, tally))
   }
 
   const setOrder = (conf: Conference, ids: string[]) => {
@@ -99,6 +108,19 @@ export function usePlayers() {
     [],
   )
   return players
+}
+
+// How many players took each side of every line. Readable before lock; only counts, never who.
+export function useTallies() {
+  const [tallies, setTallies] = useState<Record<string, Tally>>({})
+  useEffect(
+    () =>
+      onSnapshot(collection(db, 'tallies'), (snap) =>
+        setTallies(Object.fromEntries(snap.docs.map((d) => [d.id, d.data() as Tally]))),
+      ),
+    [],
+  )
+  return tallies
 }
 
 // Everyone's picks; the security rules only allow this once picks are locked.

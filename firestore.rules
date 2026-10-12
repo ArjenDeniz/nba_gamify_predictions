@@ -36,5 +36,28 @@ service cloud.firestore {
       allow create, update: if isOwner(uid) && !locked() && validPlayer(request.resource.data);
       allow delete: if false;
     }
+
+    function pickFor(pred, teamId) { return pred.get('overUnder', {}).get(teamId, ''); }
+    function sideCount(pick, side) { return pick == side ? 1 : 0; }
+
+    // A team's counts may only move by your own pick for that team changing in the same batch.
+    function validTally(teamId, prev) {
+      let mine = /databases/$(database)/documents/predictions/$(request.auth.uid);
+      let before = exists(mine) ? pickFor(get(mine).data, teamId) : '';
+      let after = pickFor(getAfter(mine).data, teamId);
+      let next = request.resource.data;
+      return next.keys().hasOnly(['O', 'U'])
+        && before != after
+        && next.get('O', 0) == prev.get('O', 0) + sideCount(after, 'O') - sideCount(before, 'O')
+        && next.get('U', 0) == prev.get('U', 0) + sideCount(after, 'U') - sideCount(before, 'U');
+    }
+
+    // Over/under pick counts per team, so the board can show which way the crowd leans before lock.
+    match /tallies/{teamId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && !locked() && validTally(teamId, {});
+      allow update: if signedIn() && !locked() && validTally(teamId, resource.data);
+      allow delete: if false;
+    }
   }
 }

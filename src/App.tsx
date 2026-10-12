@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { ErrorNote, TeamLogo } from './components'
 import { LOCK_AT, SEASON_LABEL, isLocked } from './config'
 import { TEAMS, TEAM_BY_ID } from './data/winTotals'
-import { useAllPredictions, useAuthUser, useMyPrediction, useNow, usePlayers } from './lib/data'
+import { useAllPredictions, useAuthUser, useMyPrediction, useNow, usePlayers, useTallies } from './lib/data'
 import { useStandings } from './lib/espn'
 import { logOut, signIn } from './lib/firebase'
 import { savedOrder, type Prediction } from './lib/scoring'
@@ -85,6 +85,7 @@ function Shell({ user }: { user: User }) {
   const { pred, error, setPick, setOrder } = useMyPrediction(user, !locked)
   const { standings, error: standingsError, updatedAt } = useStandings()
   const players = usePlayers()
+  const tallies = useTallies()
   const { preds, error: predsError } = useAllPredictions(locked)
 
   return (
@@ -129,7 +130,7 @@ function Shell({ user }: { user: User }) {
           <p className="px-1 text-ink-soft">Loading your picks…</p>
         ) : tab === 'over-under' ? (
           <div className="mx-auto max-w-3xl">
-            <OverUnder pred={pred} locked={locked} standings={standings} onPick={setPick} />
+            <OverUnder pred={pred} locked={locked} standings={standings} tallies={tallies} onPick={setPick} />
           </div>
         ) : tab === 'standings' ? (
           <Standings pred={pred} locked={locked} standings={standings} onOrder={setOrder} />

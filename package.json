@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:rules": "node scripts/test-rules.mjs",
+    "recount": "node scripts/recount-tallies.mjs",
     "deploy:rules": "firebase deploy --only firestore:rules"
   },
   "dependencies": {

@@ -1,15 +1,17 @@
 import { OutcomeMark, Sheet, TeamLogo } from '../components'
 import { LINES_SOURCE, TEAMS, teamsIn, type Conference, type Team } from '../data/winTotals'
+import { CROWD_STEPS, crowdLean, type Lean, type Tally } from '../lib/crowd'
 import { ouOutcome, projectedWins, type Pick, type Prediction, type Standings } from '../lib/scoring'
 
 type Props = {
   pred: Prediction
   locked: boolean
   standings: Standings | null
+  tallies: Record<string, Tally>
   onPick: (teamId: string, pick: Pick | null) => void
 }
 
-export function OverUnder({ pred, locked, standings, onPick }: Props) {
+export function OverUnder({ pred, locked, standings, tallies, onPick }: Props) {
   const picked = TEAMS.filter((t) => pred.overUnder?.[t.id]).length
 
   return (
@@ -37,6 +39,7 @@ export function OverUnder({ pred, locked, standings, onPick }: Props) {
                   pick={pred.overUnder?.[team.id]}
                   locked={locked}
                   standings={standings}
+                  lean={crowdLean(tallies[team.id])}
                   onPick={onPick}
                 />
               ))}
@@ -52,7 +55,7 @@ export function OverUnder({ pred, locked, standings, onPick }: Props) {
           year: 'numeric',
           timeZone: 'UTC',
         })}
-        .
+        . Crowd counts include your pick, round down, and show once {CROWD_STEPS[0]} players take the same side.
       </p>
     </div>
   )
@@ -76,17 +79,19 @@ function TeamRow({
   pick,
   locked,
   standings,
+  lean,
   onPick,
 }: {
   team: Team
   pick?: Pick
   locked: boolean
   standings: Standings | null
+  lean: Lean | null
   onPick: Props['onPick']
 }) {
   const record = standings?.[team.id]
   const outcome = ouOutcome(team.line, record)
-  const pace = record && projectedWins(record)
+  const pace = record ? projectedWins(record) : null
 
   return (
     <li
@@ -97,13 +102,18 @@ function TeamRow({
       <TeamLogo team={team} size={36} />
       <div className="min-w-0">
         <div className="truncate font-semibold">{team.name}</div>
-        {record && pace !== null && (
-          <div className="tabular flex gap-2 text-xs text-ink-soft">
-            <span>
-              {record.wins}–{record.losses}
-            </span>
-            <span>on pace for {pace?.toFixed(1)}</span>
-            <OutcomeMark pick={pick} outcome={outcome} />
+        {(pace !== null || lean) && (
+          <div className="tabular flex flex-wrap gap-x-2 text-xs text-ink-soft">
+            {record && pace !== null && (
+              <>
+                <span>
+                  {record.wins}–{record.losses}
+                </span>
+                <span>on pace for {pace.toFixed(1)}</span>
+                <OutcomeMark pick={pick} outcome={outcome} />
+              </>
+            )}
+            {lean && <CrowdLean lean={lean} />}
           </div>
         )}
       </div>
@@ -113,6 +123,19 @@ function TeamRow({
         <PickButton side="U" active={pick === 'U'} disabled={locked} onClick={() => onPick(team.id, pick === 'U' ? null : 'U')} team={team} />
       </div>
     </li>
+  )
+}
+
+// Which way the crowd leans, marked with a caret that lifts or sinks like the line does.
+function CrowdLean({ lean }: { lean: Lean }) {
+  const over = lean.side === 'O'
+  return (
+    <span className="inline-flex items-center gap-1">
+      <svg width="8" height="6" viewBox="0 0 8 6" aria-hidden className={over ? 'text-over' : 'text-under'}>
+        <path d={over ? 'M4 0l4 6H0z' : 'M4 6L0 0h8z'} fill="currentColor" />
+      </svg>
+      {lean.atLeast}+ picked {over ? 'over' : 'under'}
+    </span>
   )
 }
 

@@ -12,6 +12,14 @@ const AFTER = '2026-10-21T12:00:00Z'
 const doc = (path) => `/databases/(default)/documents/${path}`
 const order = Array.from({ length: 15 }, (_, i) => String(i + 1))
 const player = { name: 'Alice', photoURL: null, ouCount: 3, standingsDone: false }
+// Alice's prediction before and after the batch a tally write rides along with.
+const mine = (before, after) => [
+  { function: 'exists', args: [{ anyValue: {} }], result: { value: before !== undefined } },
+  ...(before !== undefined ? [{ function: 'get', args: [{ anyValue: {} }], result: { value: { data: before } } }] : []),
+  { function: 'getAfter', args: [{ anyValue: {} }], result: { value: { data: after } } },
+]
+const nuggetsOver = { overUnder: { 7: 'O' } }
+const nuggetsUnder = { overUnder: { 7: 'U' } }
 
 const cases = [
   ['own prediction readable before lock', 'ALLOW', { uid: 'alice', method: 'get', path: 'predictions/alice', time: BEFORE }],
@@ -26,10 +34,22 @@ const cases = [
   ['no extra fields on predictions', 'DENY', { uid: 'alice', method: 'update', path: 'predictions/alice', time: BEFORE, data: { score: 120 } }],
   ['register in players before lock', 'ALLOW', { uid: 'alice', method: 'create', path: 'players/alice', time: BEFORE, data: player }],
   ["can't update players after lock", 'DENY', { uid: 'alice', method: 'update', path: 'players/alice', time: AFTER, data: player }],
+  ['pick counts readable before lock', 'ALLOW', { uid: 'alice', method: 'get', path: 'tallies/7', time: BEFORE }],
+  ['signed-out users see no pick counts', 'DENY', { method: 'get', path: 'tallies/7', time: BEFORE }],
+  ['first pick creates the count', 'ALLOW', { uid: 'alice', method: 'create', path: 'tallies/7', time: BEFORE, data: { O: 1, U: 0 }, mocks: mine(undefined, nuggetsOver) }],
+  ['switching sides moves the count', 'ALLOW', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 3, U: 3 }, mocks: mine(nuggetsOver, nuggetsUnder) }],
+  ['clearing a pick drops the count', 'ALLOW', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 3, U: 2 }, mocks: mine(nuggetsOver, {}) }],
+  ["count can't move without your pick changing", 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 5, U: 2 }, mocks: mine(nuggetsOver, nuggetsOver) }],
+  ["count can't jump by more than your pick", 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 6, U: 2 }, mocks: mine({}, nuggetsOver) }],
+  ["another team's pick doesn't move this count", 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 5, U: 2 }, mocks: mine({}, { overUnder: { 9: 'O' } }) }],
+  ['no extra fields on pick counts', 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: BEFORE, existing: { O: 4, U: 2 }, data: { O: 5, U: 2, who: 'alice' }, mocks: mine({}, nuggetsOver) }],
+  ["counts can't change after lock", 'DENY', { uid: 'alice', method: 'update', path: 'tallies/7', time: AFTER, existing: { O: 4, U: 2 }, data: { O: 5, U: 2 }, mocks: mine({}, nuggetsOver) }],
 ]
 
 const testCases = cases.map(([, expectation, c]) => ({
   expectation,
+  ...(c.existing && { resource: { data: c.existing } }),
+  ...(c.mocks && { functionMocks: c.mocks }),
   request: {
     ...(c.uid && { auth: { uid: c.uid } }),
     path: doc(c.path),
